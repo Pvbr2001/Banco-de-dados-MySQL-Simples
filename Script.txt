@@ -1,0 +1,179 @@
+create database petshop;
+create user petshop;
+
+create table clientes(
+idclientes int primary key auto_increment,
+nome text not null,
+telefone text,
+endereco text
+);
+
+create table animal(
+idanimal int primary key auto_increment,
+nome text not null,
+especie text,
+raca text,
+data_de_nascimento date,
+idclientes int,
+foreign key (idclientes) references clientes(idclientes)
+); 
+
+
+create table veterinario(
+idveterinario int primary key auto_increment,
+nome text not null,
+especialidade text,
+telefone text,
+endereco text, 
+salario decimal(10,2)
+);
+
+create table consulta_veterinaria(
+idconsulta int primary key auto_increment,
+idanimal int,
+idveterinario int,
+data_consulta date,
+duracao_em_minutos int,
+descricao varchar (500),
+foreign key (idanimal) references animal(idanimal),
+foreign key (idveterinario) references veterinario(idveterinario)
+);
+
+create table receita_animal(
+idreceita int primary key auto_increment,
+idconsulta int,
+descricao varchar (500),
+foreign key (idconsulta) references consulta_veterinaria(idconsulta)
+);
+
+insert into clientes(nome, telefone, endereco)
+values ('Joao Silva', '71-99456-7890', 'Rua das flores, 123'), 
+('Maria souza', '71-98765-3210', 'Sem endereço'),
+('Pedro santos', '', 'Rua principal, 789'),
+('Izabel Santos', '', 'Alto da colina, 16'),
+('Eduardo santos', '71-99888-8888', 'Rua Manoel merces, 72'),
+('Iago Santos', '', 'Rua eixo industrial, 121'),
+('Lana amancio', '', 'Carlos Drummond, 234');
+
+
+select * from clientes;
+
+
+insert into animal(nome,especie,raca,data_de_nascimento, idclientes)
+values ('REX','Cachorro','Labrador','2018-02-15', 1),
+('Whiskers','Gato','Siamês', '2019-02-15', 2),
+('Buddy','Cachorro','Bulldog',null, 1),
+('Mingau','Gato','SRD',null,4),
+('Amy','Gato','SDR', '2017-12-01', 4),
+('Hulk','Cachorro','Yorkshire', '2017-12-01', 6),
+('Marrudo','Cachorro','Pitbull', '2021-05-05', 5),
+('Maia','Cachorro','Yorkshire', '2018-07-27', 7);
+
+select * from animal;
+
+Update animal set raca='SRD' where idanimal = 5;
+
+
+insert into veterinario(nome, especialidade, telefone, endereco, salario)
+values('Dra. Ana Ferreira','Clinica geral','71-92222-3333','Rua dos animais, 789', '5900.00'),
+('Dra. Julia Ferreira','Clinica geral','71-98988-2525','Rua Fauna, 123', '3500.00'),
+('Dr. Carlos Rodrigues','Dentista Animal','71-99455-6666','Avenida dos Bichos, 123', '5900.00'),
+('Dr. Zé rodrigues','Dentista Animal','71-9455-6666','Av. Passarinho, 777', '3500.00'),
+('Dra. Laura Souza','Ortopedista','77-98988-9999','Rua dos Pets, 456', '3500.00');
+
+insert into consulta_veterinaria(idanimal, idveterinario, data_consulta, duracao_em_minutos, descricao)
+values(1, 1, '2023-03-15',45, 'Exame de rotina para o Rex.'),
+(2, 2, '2023-03-16',25, 'Verificação de saúde do Whiskers.'),
+(5, 2, '2023-10-17',120, 'Castração.'),
+(6, 3, '2023-10-17',120, 'Castração.'),
+(4, 4, '2023-10-18',45, 'Verificação de problemas com engasgamento. Obs.: bola de pêlo.'),
+(3, 4, '2023-11-20',79, 'Buddy com dor nas patas.');
+
+INSERT INTO receita_animal (idconsulta, descricao) VALUES
+(1, 'Administrar medicamento de acordo com as instruções.'),
+(2, 'Recomendado acompanhamento regular e uma dieta balanceada.'),
+(3, 'Prescrição de medicamentos para alívio da dor.'),
+(4, 'Prescrição de medicamentos para alívio da dor e anti-inflamatórios.');
+
+-- Criação de procedures
+DELIMITER //
+CREATE PROCEDURE SomaDuracaoConsultas(IN nome_veterinario VARCHAR(255))
+BEGIN
+    SELECT SUM(duracao_em_minutos) AS total_duracao
+    FROM consulta_veterinaria
+    JOIN veterinario ON consulta_veterinaria.idveterinario = veterinario.idveterinario
+    WHERE veterinario.nome = nome_veterinario;
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE AtualizaDescricaoConsulta(IN id_consulta INT, IN nova_descricao VARCHAR(500))
+BEGIN
+    UPDATE consulta_veterinaria
+    SET descricao = nova_descricao
+    WHERE idconsulta = id_consulta;
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE AumentoSalarioVeterinario()
+BEGIN
+    UPDATE veterinario
+    SET salario = salario * 1.1
+    WHERE idveterinario IN (
+        SELECT idveterinario
+        FROM consulta_veterinaria
+        WHERE MONTH(data_consulta) = MONTH(CURRENT_DATE())
+        GROUP BY idveterinario
+        HAVING COUNT(idconsulta) > 2
+    );
+END //
+DELIMITER ;
+
+-- Criação de funções
+DELIMITER //
+CREATE FUNCTION FaixaEtariaAnimal(id_animal INT) RETURNS VARCHAR(10)
+BEGIN
+    DECLARE anos INT;
+    SELECT TIMESTAMPDIFF(YEAR, data_nascimento, CURDATE()) INTO anos FROM animal WHERE idanimal = id_animal;
+    IF anos < 2 THEN
+        RETURN 'FILHOTE';
+    ELSEIF anos BETWEEN 2 AND 7 THEN
+        RETURN 'JOVEM';
+    ELSE
+        RETURN 'IDOSO';
+    END IF;
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE FUNCTION VerificaClientePremium(id_cliente INT) RETURNS VARCHAR(15)
+BEGIN
+    DECLARE qtd_animais INT;
+    DECLARE qtd_consultas INT;
+    SELECT COUNT(*) INTO qtd_animais FROM animal WHERE idcliente = id_cliente;
+    SELECT COUNT(*) INTO qtd_consultas FROM consulta_veterinaria WHERE idanimal IN (SELECT idanimal FROM animal WHERE idcliente = id_cliente);
+    IF qtd_animais > 1 AND qtd_consultas > 1 THEN
+        RETURN 'Cliente Premium';
+    ELSE
+        RETURN 'Cliente Comum';
+    END IF;
+END //
+DELIMITER ;
+
+-- Criação de visão
+CREATE VIEW InformacoesGerais AS
+SELECT cliente.nome AS nome_cliente,
+       VerificaClientePremium(cliente.idcliente) AS tipo_cliente,
+       animal.nome AS nome_animal,
+       animal.especie,
+       animal.raca,
+       FaixaEtariaAnimal(animal.idanimal) AS faixa_etaria,
+       consulta_veterinaria.data_consulta,
+       consulta_veterinaria.descricao AS descricao_consulta,
+       veterinario.nome AS nome_veterinario
+FROM cliente
+JOIN animal ON cliente.idcliente = animal.idcliente
+LEFT JOIN consulta_veterinaria ON animal.idanimal = consulta_veterinaria.idanimal
+LEFT JOIN veterinario ON consulta_veterinaria.idveterinario = veterinario.idveterinario;
+
